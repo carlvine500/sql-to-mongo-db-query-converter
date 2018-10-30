@@ -688,8 +688,9 @@ public class QueryConverterTest {
 
     @Test
     public void selectWithSubQuery() throws ParseException {
-        expectedException.expect(ParseException.class);
-        expectedException.expectMessage(containsString("Only column names supported"));
+// 为了支持查询 select a.* from tb;不再需要指明字段
+//        expectedException.expect(ParseException.class);
+//        expectedException.expectMessage(containsString("Only column names supported"));
         new QueryConverter("select (select id from table2), column2 from my_table where value=\"theValue\"");
     }
 
@@ -775,7 +776,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select * from my_table where (value = \"1234\" OR value = \"1235\" OR value = \"1236\" OR value = \"1237\"  OR value = \"1238\")");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"$or\": [\n" +
                 "    {\n" +
                 "      \"value\": \"1234\"\n" +
@@ -802,7 +803,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select * from my_table where (value = \"1234\" AND value = \"1235\" AND value = \"1236\" AND value = \"1237\"  AND value = \"1238\")");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"$and\": [\n" +
                 "    {\n" +
                 "      \"value\": \"1234\"\n" +
@@ -828,7 +829,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select * from my_table where \"foo\" IS NULL");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"foo\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -840,7 +841,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select * from my_table where value IS NULL");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"value\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -852,7 +853,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select * from my_table where value IS NULL order by field_1, field_2 DESC");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"value\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -867,7 +868,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select distinct column1 from my_table where value IS NULL");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.distinct(\"column1\" , {\n" +
+        assertEquals("db.getCollection(\"my_table\").distinct(\"column1\" , {\n" +
                 "  \"value\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -879,7 +880,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select count(*) from my_table where value IS NULL");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.count({\n" +
+        assertEquals("db.getCollection(\"my_table\").count({\n" +
                 "  \"value\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -895,7 +896,7 @@ public class QueryConverterTest {
                 "GROUP BY agent_code;");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.orders.aggregate([{\n" +
+        assertEquals("db.getCollection(\"orders\").aggregate([{\n" +
                 "  \"$match\": {\n" +
                 "    \"agent_code\": {\n" +
                 "      \"$regex\": \"^AW.{1}.*$\"\n" +
@@ -922,7 +923,7 @@ public class QueryConverterTest {
                 "GROUP BY agent_code;");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.orders.aggregate([{\n" +
+        assertEquals("db.getCollection(\"orders\").aggregate([{\n" +
                 "  \"$match\": {\n" +
                 "    \"agent_code\": {\n" +
                 "      \"$regex\": \"^AW.{1}.*$\"\n" +
@@ -953,7 +954,7 @@ public class QueryConverterTest {
                 "ORDER BY COUNT (advance_amount) DESC;");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.orders.aggregate([{\n" +
+        assertEquals("db.getCollection(\"orders\").aggregate([{\n" +
                 "  \"$match\": {\n" +
                 "    \"agent_code\": {\n" +
                 "      \"$regex\": \"^AW.{1}.*$\"\n" +
@@ -978,7 +979,7 @@ public class QueryConverterTest {
         QueryConverter queryConverter = new QueryConverter("select column1, column2 from my_table where value IS NULL");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         queryConverter.write(byteArrayOutputStream);
-        assertEquals("db.my_table.find({\n" +
+        assertEquals("db.getCollection(\"my_table\").find({\n" +
                 "  \"value\": {\n" +
                 "    \"$exists\": false\n" +
                 "  }\n" +
@@ -997,7 +998,7 @@ public class QueryConverterTest {
                 "\n" +
                 "Was expecting one of:\n" +
                 "\n" +
-                "    \".\"\n" +
+                "    \"&&\"\n" +
                 "    \";\"\n" +
                 "    \"AND\"\n" +
                 "    \"CONNECT\"\n" +

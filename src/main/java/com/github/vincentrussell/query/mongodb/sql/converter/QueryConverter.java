@@ -11,7 +11,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.mongodb.bulk.DeleteRequest;
 import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
@@ -22,7 +21,10 @@ import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.parser.CCJSqlParser;
 import net.sf.jsqlparser.parser.StreamProvider;
 import net.sf.jsqlparser.schema.Column;
-import net.sf.jsqlparser.statement.select.*;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.OrderByElement;
+import net.sf.jsqlparser.statement.select.SelectExpressionItem;
+import net.sf.jsqlparser.statement.select.SelectItem;
 import org.apache.commons.io.IOUtils;
 import org.bson.Document;
 
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.apache.commons.lang.StringUtils.isEmpty;
 
@@ -96,6 +99,10 @@ public class QueryConverter {
         this(inputStream,Collections.<String, FieldType>emptyMap(), FieldType.UNKNOWN);
     }
 
+    public QueryConverter(InputStream inputStream, Map<String,FieldType> fieldNameToFieldTypeMapping,
+                          FieldType defaultFieldType) throws ParseException {
+        this(inputStream, fieldNameToFieldTypeMapping, defaultFieldType, null, null);
+    }
     /**
      * Create a QueryConverter with an InputStream
      * @param inputStream an input stream that has the sql statement in it
@@ -104,7 +111,7 @@ public class QueryConverter {
      * @throws ParseException when the sql query cannot be parsed
      */
     public QueryConverter(InputStream inputStream, Map<String,FieldType> fieldNameToFieldTypeMapping,
-                          FieldType defaultFieldType) throws ParseException {
+                          FieldType defaultFieldType, Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) throws ParseException {
         try {
             StreamProvider streamProvider = new StreamProvider(inputStream, Charsets.UTF_8.name());
             CCJSqlParser jSqlParser = new CCJSqlParser(streamProvider);
@@ -112,7 +119,7 @@ public class QueryConverter {
             //final PlainSelect plainSelect = jSqlParser.PlainSelect();
             this.sqlCommandInfoHolder = SQLCommandInfoHolder.Builder
                     .create(defaultFieldType, fieldNameToFieldTypeMapping)
-                    .setJSqlParser(jSqlParser)
+                    .setJSqlParser(jSqlParser,renameTableFunc,renameColumnFunc)
                     .build();
             this.fieldNameToFieldTypeMapping = fieldNameToFieldTypeMapping != null
                     ? fieldNameToFieldTypeMapping : Collections.<String, FieldType>emptyMap();
@@ -149,9 +156,16 @@ public class QueryConverter {
         SqlUtils.isFalse((selectItems.size() >1
                 || SqlUtils.isSelectAll(selectItems))
                 && sqlCommandInfoHolder.isDistinct(),"cannot run distinct one more than one column");
-        SqlUtils.isFalse(sqlCommandInfoHolder.getGoupBys().size() == 0 && selectItems.size()!=filteredItems.size() && !SqlUtils.isSelectAll(selectItems)
-                && !SqlUtils.isCountAll(selectItems),"illegal expression(s) found in select clause.  Only column names supported");
-        SqlUtils.isTrue(sqlCommandInfoHolder.getJoins()==null || sqlCommandInfoHolder.getJoins().isEmpty(),"Joins are not supported.  Only one simple table name is supported.");
+        SqlUtils.isFalse(
+                sqlCommandInfoHolder.getGoupBys().size() == 0
+                /*&& selectItems.size()!=filteredItems.size()*/&& false
+                && !SqlUtils.isSelectAll(selectItems)
+                && !SqlUtils.isCountAll(selectItems),
+                "illegal expression(s) found in select clause.  Only column names supported");
+        SqlUtils.isTrue(
+                sqlCommandInfoHolder.getJoins()==null
+                        || sqlCommandInfoHolder.getJoins().isEmpty(),
+                "Joins are not supported.  Only one simple table name is supported.");
     }
 
     /**
@@ -179,7 +193,7 @@ public class QueryConverter {
         } else if (!SqlUtils.isSelectAll(sqlCommandInfoHolder.getSelectItems())) {
             document.put("_id",0);
             for (SelectItem selectItem : sqlCommandInfoHolder.getSelectItems()) {
-                document.put(selectItem.toString(),1);
+                document.put(selectItem.toString(), 1);
             }
             mongoDBQueryHolder.setProjection(document);
         }
@@ -329,12 +343,12 @@ public class QueryConverter {
     public void write(OutputStream outputStream) throws IOException {
         MongoDBQueryHolder mongoDBQueryHolder = getMongoQuery();
         if (mongoDBQueryHolder.isDistinct()) {
-            IOUtils.write("db." + mongoDBQueryHolder.getCollection() + ".distinct(", outputStream);
+            IOUtils.write("db.getCollection(\"" + mongoDBQueryHolder.getCollection() + "\").distinct(", outputStream);
             IOUtils.write("\""+getDistinctFieldName(mongoDBQueryHolder) + "\"", outputStream);
             IOUtils.write(" , ", outputStream);
             IOUtils.write(prettyPrintJson(mongoDBQueryHolder.getQuery().toJson()), outputStream);
         } else if (sqlCommandInfoHolder.getGoupBys().size() > 0) {
-            IOUtils.write("db." + mongoDBQueryHolder.getCollection() + ".aggregate(", outputStream);
+            IOUtils.write("db.getCollection(\"" + mongoDBQueryHolder.getCollection() + "\").aggregate(", outputStream);
             IOUtils.write("[", outputStream);
             List<Document> documents = new ArrayList<>();
             documents.add(new Document("$match",mongoDBQueryHolder.getQuery()));
@@ -373,10 +387,10 @@ public class QueryConverter {
 
 
         } else if (sqlCommandInfoHolder.isCountAll()) {
-            IOUtils.write("db." + mongoDBQueryHolder.getCollection() + ".count(", outputStream);
+            IOUtils.write("db.getCollection(\"" + mongoDBQueryHolder.getCollection() + "\").count(", outputStream);
             IOUtils.write(prettyPrintJson(mongoDBQueryHolder.getQuery().toJson()), outputStream);
         } else {
-            IOUtils.write("db." + mongoDBQueryHolder.getCollection() + ".find(", outputStream);
+            IOUtils.write("db.getCollection(\"" + mongoDBQueryHolder.getCollection() + "\").find(", outputStream);
             IOUtils.write(prettyPrintJson(mongoDBQueryHolder.getQuery().toJson()), outputStream);
             if (mongoDBQueryHolder.getProjection() != null && mongoDBQueryHolder.getProjection().size() > 0) {
                 IOUtils.write(" , ", outputStream);
@@ -473,5 +487,7 @@ public class QueryConverter {
         return gson.toJson(je);
     }
 
-
+    public SQLCommandInfoHolder getSqlCommandInfoHolder() {
+        return sqlCommandInfoHolder;
+    }
 }

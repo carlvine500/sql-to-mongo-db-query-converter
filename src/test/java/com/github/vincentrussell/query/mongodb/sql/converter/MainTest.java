@@ -79,7 +79,7 @@ public class MainTest {
             String result = systemOutRule.getLog().replaceAll(Main.ENTER_SQL_TEXT,"");
             assertEquals("******Mongo Query:*********\n" +
                     "\n" +
-                    "db.my_table.find({\n" +
+                    "db.getCollection(\"my_table\").find({\n" +
                     "  \"value\": {\n" +
                     "    \"$in\": [\n" +
                     "      \"theValue1\",\n" +

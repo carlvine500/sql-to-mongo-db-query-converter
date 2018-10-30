@@ -2,15 +2,23 @@ package com.github.vincentrussell.query.mongodb.sql.converter;
 
 import com.github.vincentrussell.query.mongodb.sql.converter.util.SqlUtils;
 import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.ExpressionVisitorAdapter;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.Parenthesis;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParser;
 import net.sf.jsqlparser.parser.ParseException;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.*;
+import net.sf.jsqlparser.util.deparser.SelectDeParser;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class SQLCommandInfoHolder {
     private final SQLCommandType sqlCommandType;
@@ -23,9 +31,11 @@ public class SQLCommandInfoHolder {
     private final List<Join> joins;
     private final List<String> groupBys;
     private final List<OrderByElement> orderByElements;
+    private final Statement statement;
 
     public SQLCommandInfoHolder(SQLCommandType sqlCommandType, Expression whereClause,
-                                boolean isDistinct, boolean isCountAll, String table, long limit, List<SelectItem> selectItems, List<Join> joins, List<String> groupBys, List<OrderByElement> orderByElements) {
+                                boolean isDistinct, boolean isCountAll, String table, long limit, List<SelectItem> selectItems, List<Join> joins, List<String> groupBys, List<OrderByElement> orderByElements
+            , Statement statement) {
         this.sqlCommandType = sqlCommandType;
         this.whereClause = whereClause;
         this.isDistinct = isDistinct;
@@ -36,6 +46,7 @@ public class SQLCommandInfoHolder {
         this.joins = joins;
         this.groupBys = groupBys;
         this.orderByElements = orderByElements;
+        this.statement = statement;
     }
 
     public boolean isDistinct() {
@@ -78,6 +89,10 @@ public class SQLCommandInfoHolder {
         return sqlCommandType;
     }
 
+    public Statement getStatement() {
+        return statement;
+    }
+
     public static class Builder {
         private final FieldType defaultFieldType;
         private final Map<String, FieldType> fieldNameToFieldTypeMapping;
@@ -91,6 +106,7 @@ public class SQLCommandInfoHolder {
         private List<Join> joins = new ArrayList<>();
         private List<String> groupBys = new ArrayList<>();
         private List<OrderByElement> orderByElements1 = new ArrayList<>();
+        private Statement statement;
 
 
         private Builder(FieldType defaultFieldType, Map<String, FieldType> fieldNameToFieldTypeMapping){
@@ -99,12 +115,18 @@ public class SQLCommandInfoHolder {
         }
 
         public Builder setJSqlParser(CCJSqlParser jSqlParser) throws com.github.vincentrussell.query.mongodb.sql.converter.ParseException, ParseException {
+           return setJSqlParser(jSqlParser, null, null);
+        }
+
+        public Builder setJSqlParser(CCJSqlParser jSqlParser, Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) throws com.github.vincentrussell.query.mongodb.sql.converter.ParseException, ParseException {
             final Statement statement = jSqlParser.Statement();
+            this.statement = statement;
             if (Select.class.isAssignableFrom(statement.getClass())) {
                 sqlCommandType = SQLCommandType.SELECT;
                 final PlainSelect plainSelect = (PlainSelect)(((Select)statement).getSelectBody());
                 SqlUtils.isTrue(plainSelect != null, "could not parseNaturalLanguageDate SELECT statement from query");
                 SqlUtils.isTrue(plainSelect.getFromItem()!=null,"could not find table to query.  Only one simple table name is supported.");
+                renameTableAndColumn(plainSelect,renameTableFunc,renameColumnFunc);
                 whereClause = plainSelect.getWhere();
                 isDistinct = (plainSelect.getDistinct() != null);
                 isCountAll = SqlUtils.isCountAll(plainSelect.getSelectItems());
@@ -126,9 +148,87 @@ public class SQLCommandInfoHolder {
             return this;
         }
 
+        public void renameTableAndColumn(PlainSelect plainSelect,Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) {
+            if (renameTableFunc == null || renameColumnFunc == null) {
+                return;
+            }
+            //改where字段名
+            if(plainSelect.getWhere()!=null){
+                plainSelect.getWhere().accept(new ExpressionVisitorAdapter() {
+                    @Override
+                    public void visit(Column column) {
+                        renameColumnFunc.accept(column);
+                        super.visit(column);
+                    }
+                });
+            }
+
+            //改表名
+            plainSelect.accept(new SelectDeParser() {
+                @Override
+                public void visit(Table tableName) {
+                    renameTableFunc.accept(tableName);
+                    super.visit(tableName);
+                }
+            });
+            //改select字段名==>全部查询出来
+            List<SelectItem> otherSelectItems = new ArrayList<>();
+            for (SelectItem selectItem : plainSelect.getSelectItems()) {
+                if (selectItem instanceof SelectExpressionItem) {
+                    Expression expression = ((SelectExpressionItem) selectItem).getExpression();
+                    if (expression instanceof Column) {
+                        renameColumnFunc.accept((Column) expression);
+                    } else if (expression instanceof Parenthesis) {
+                        renameIfItIsColumn(((Parenthesis) expression).getExpression(), renameColumnFunc);
+                    } else {
+                        if (expression instanceof Function) {
+                            Function function = (Function) expression;
+                            ExpressionList parameters = function.getParameters();
+                            if (parameters == null) {
+                                continue;
+                            }
+                            for (Expression funcExpr : parameters.getExpressions()) {
+                                renameIfItIsColumn(funcExpr, renameColumnFunc);
+                            }
+                        }
+                    }
+                } else if (selectItem instanceof AllTableColumns) {
+                    Column column = new Column(selectItem.toString());
+                    renameColumnFunc.accept(column);
+                    SelectExpressionItem e = new SelectExpressionItem(column);
+                    otherSelectItems.add(e);
+                }
+            }
+            plainSelect.getSelectItems().addAll(otherSelectItems);
+            // rename order by column
+            if (plainSelect.getOrderByElements() != null) {
+                for (OrderByElement orderByElement : plainSelect.getOrderByElements()) {
+                    orderByElement.accept(new OrderByVisitor() {
+                        @Override
+                        public void visit(OrderByElement orderBy) {
+                            renameIfItIsColumn(orderBy.getExpression(),renameColumnFunc);
+                        }
+                    });
+                }
+            }
+            // rename group by column
+            if (plainSelect.getGroupByColumnReferences() != null) {
+                for (Expression expression : plainSelect.getGroupByColumnReferences()) {
+                    renameIfItIsColumn(expression,renameColumnFunc);
+                }
+            }
+
+        }
+
+        public static void renameIfItIsColumn(Object column, Consumer<Column> renameColumnFunc) {
+            if (column instanceof Column) {
+                renameColumnFunc.accept((Column)column);
+            }
+        }
+
         public SQLCommandInfoHolder build() {
             return new SQLCommandInfoHolder(sqlCommandType, whereClause,
-                    isDistinct, isCountAll, table, limit, selectItems, joins, groupBys, orderByElements1);
+                    isDistinct, isCountAll, table, limit, selectItems, joins, groupBys, orderByElements1, statement);
         }
 
         public static Builder create(FieldType defaultFieldType, Map<String, FieldType> fieldNameToFieldTypeMapping) {
