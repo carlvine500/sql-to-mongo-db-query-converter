@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static org.apache.commons.lang.StringUtils.isEmpty;
@@ -111,7 +112,7 @@ public class QueryConverter {
      * @throws ParseException when the sql query cannot be parsed
      */
     public QueryConverter(InputStream inputStream, Map<String,FieldType> fieldNameToFieldTypeMapping,
-                          FieldType defaultFieldType, Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) throws ParseException {
+                          FieldType defaultFieldType, Consumer<Table> renameTableFunc, BiConsumer<String,Column> renameColumnFunc) throws ParseException {
         try {
             StreamProvider streamProvider = new StreamProvider(inputStream, Charsets.UTF_8.name());
             CCJSqlParser jSqlParser = new CCJSqlParser(streamProvider);

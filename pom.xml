@@ -12,7 +12,7 @@
     MongoDb based on Queries provided in SQL.</description>
   <url>https://github.com/vincentrussell/sql-to-mongo-db-query-converter</url>
 
-  <distributionManagement>
+  <!--<distributionManagement>
     <repository>
       <id>sonatype-nexus-staging</id>
       <name>Nexus Release Repository</name>
@@ -22,6 +22,13 @@
       <id>sonatype-nexus-snapshots</id>
       <name>Sonatype Nexus Snapshots</name>
       <url>http://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>-->
+  <distributionManagement>
+    <snapshotRepository>
+      <id>snapshots</id>
+      <name>Snapshots</name>
+      <url>http://maven.bizsaas.tech/nexus/content/repositories/snapshots</url>
     </snapshotRepository>
   </distributionManagement>
 

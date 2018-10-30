@@ -18,6 +18,7 @@ import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class SQLCommandInfoHolder {
@@ -118,7 +119,7 @@ public class SQLCommandInfoHolder {
            return setJSqlParser(jSqlParser, null, null);
         }
 
-        public Builder setJSqlParser(CCJSqlParser jSqlParser, Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) throws com.github.vincentrussell.query.mongodb.sql.converter.ParseException, ParseException {
+        public Builder setJSqlParser(CCJSqlParser jSqlParser, Consumer<Table> renameTableFunc, BiConsumer<String,Column> renameColumnFunc) throws com.github.vincentrussell.query.mongodb.sql.converter.ParseException, ParseException {
             final Statement statement = jSqlParser.Statement();
             this.statement = statement;
             if (Select.class.isAssignableFrom(statement.getClass())) {
@@ -126,7 +127,6 @@ public class SQLCommandInfoHolder {
                 final PlainSelect plainSelect = (PlainSelect)(((Select)statement).getSelectBody());
                 SqlUtils.isTrue(plainSelect != null, "could not parseNaturalLanguageDate SELECT statement from query");
                 SqlUtils.isTrue(plainSelect.getFromItem()!=null,"could not find table to query.  Only one simple table name is supported.");
-                renameTableAndColumn(plainSelect,renameTableFunc,renameColumnFunc);
                 whereClause = plainSelect.getWhere();
                 isDistinct = (plainSelect.getDistinct() != null);
                 isCountAll = SqlUtils.isCountAll(plainSelect.getSelectItems());
@@ -138,6 +138,7 @@ public class SQLCommandInfoHolder {
                 joins = plainSelect.getJoins();
                 groupBys = SqlUtils.getGroupByColumnReferences(plainSelect);
                 SqlUtils.isTrue(plainSelect.getFromItem() != null, "could not find table to query.  Only one simple table name is supported.");
+                renameTableAndColumn(plainSelect,renameTableFunc,renameColumnFunc);
             } else if (Delete.class.isAssignableFrom(statement.getClass())) {
                 sqlCommandType = SQLCommandType.DELETE;
                 Delete delete = (Delete)statement;
@@ -148,7 +149,7 @@ public class SQLCommandInfoHolder {
             return this;
         }
 
-        public void renameTableAndColumn(PlainSelect plainSelect,Consumer<Table> renameTableFunc, Consumer<Column> renameColumnFunc) {
+        public void renameTableAndColumn(PlainSelect plainSelect,Consumer<Table> renameTableFunc, BiConsumer<String,Column> renameColumnFunc) {
             if (renameTableFunc == null || renameColumnFunc == null) {
                 return;
             }
@@ -157,7 +158,7 @@ public class SQLCommandInfoHolder {
                 plainSelect.getWhere().accept(new ExpressionVisitorAdapter() {
                     @Override
                     public void visit(Column column) {
-                        renameColumnFunc.accept(column);
+                        renameColumnFunc.accept(table,column);
                         super.visit(column);
                     }
                 });
@@ -177,9 +178,9 @@ public class SQLCommandInfoHolder {
                 if (selectItem instanceof SelectExpressionItem) {
                     Expression expression = ((SelectExpressionItem) selectItem).getExpression();
                     if (expression instanceof Column) {
-                        renameColumnFunc.accept((Column) expression);
+                        renameColumnFunc.accept(table,(Column) expression);
                     } else if (expression instanceof Parenthesis) {
-                        renameIfItIsColumn(((Parenthesis) expression).getExpression(), renameColumnFunc);
+                        renameIfItIsColumn(table,((Parenthesis) expression).getExpression(), renameColumnFunc);
                     } else {
                         if (expression instanceof Function) {
                             Function function = (Function) expression;
@@ -188,13 +189,13 @@ public class SQLCommandInfoHolder {
                                 continue;
                             }
                             for (Expression funcExpr : parameters.getExpressions()) {
-                                renameIfItIsColumn(funcExpr, renameColumnFunc);
+                                renameIfItIsColumn(this.table,funcExpr, renameColumnFunc);
                             }
                         }
                     }
                 } else if (selectItem instanceof AllTableColumns) {
                     Column column = new Column(selectItem.toString());
-                    renameColumnFunc.accept(column);
+                    renameColumnFunc.accept(this.table,column);
                     SelectExpressionItem e = new SelectExpressionItem(column);
                     otherSelectItems.add(e);
                 }
@@ -206,7 +207,7 @@ public class SQLCommandInfoHolder {
                     orderByElement.accept(new OrderByVisitor() {
                         @Override
                         public void visit(OrderByElement orderBy) {
-                            renameIfItIsColumn(orderBy.getExpression(),renameColumnFunc);
+                            renameIfItIsColumn(table,orderBy.getExpression(),renameColumnFunc);
                         }
                     });
                 }
@@ -214,15 +215,15 @@ public class SQLCommandInfoHolder {
             // rename group by column
             if (plainSelect.getGroupByColumnReferences() != null) {
                 for (Expression expression : plainSelect.getGroupByColumnReferences()) {
-                    renameIfItIsColumn(expression,renameColumnFunc);
+                    renameIfItIsColumn(this.table,expression,renameColumnFunc);
                 }
             }
 
         }
 
-        public static void renameIfItIsColumn(Object column, Consumer<Column> renameColumnFunc) {
+        public  void renameIfItIsColumn(String table,Object column, BiConsumer<String,Column> renameColumnFunc) {
             if (column instanceof Column) {
-                renameColumnFunc.accept((Column)column);
+                renameColumnFunc.accept(this.table,(Column)column);
             }
         }
 
