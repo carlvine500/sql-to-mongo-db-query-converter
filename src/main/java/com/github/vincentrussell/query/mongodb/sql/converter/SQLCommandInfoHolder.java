@@ -139,6 +139,9 @@ public class SQLCommandInfoHolder {
                 groupBys = SqlUtils.getGroupByColumnReferences(plainSelect);
                 SqlUtils.isTrue(plainSelect.getFromItem() != null, "could not find table to query.  Only one simple table name is supported.");
                 renameTableAndColumn(plainSelect,renameTableFunc,renameColumnFunc);
+                Table tableTmp = new Table(this.table);
+                renameTableFunc.accept(tableTmp);
+                table = tableTmp.getName();
             } else if (Delete.class.isAssignableFrom(statement.getClass())) {
                 sqlCommandType = SQLCommandType.DELETE;
                 Delete delete = (Delete)statement;
