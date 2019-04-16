@@ -152,6 +152,16 @@ public class SqlUtils {
         return -1;
     }
 
+    public static long getOffset(Limit limit) throws ParseException {
+        if (limit!=null && limit.getOffset()!=null) {
+            String offsetString = SqlUtils.getStringValue(limit.getOffset());
+            BigInteger bigInt = new BigInteger(offsetString);
+            isFalse(bigInt.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0, offsetString + ": value is too large");
+            return bigInt.longValue();
+        }
+        return -1;
+    }
+
     public static String fixDoubleSingleQuotes(final String regex) {
         return regex.replaceAll("''", "'");
     }

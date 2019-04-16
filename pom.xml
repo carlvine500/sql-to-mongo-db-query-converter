@@ -28,7 +28,7 @@
     <snapshotRepository>
       <id>snapshots</id>
       <name>Snapshots</name>
-      <url>http://maven.bizsaas.tech/nexus/content/repositories/snapshots</url>
+      <url>http://maven.successchannel.tech/nexus/content/repositories/snapshots</url>
     </snapshotRepository>
   </distributionManagement>
 
@@ -225,6 +225,11 @@
       <groupId>com.alibaba</groupId>
       <artifactId>fastjson</artifactId>
       <version>1.2.45</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-beanutils</groupId>
+      <artifactId>commons-beanutils</artifactId>
+      <version>1.9.3</version>
     </dependency>
   </dependencies>
 
