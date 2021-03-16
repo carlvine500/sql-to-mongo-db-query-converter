@@ -1,0 +1,57 @@
+// select count(*),r.name from Radar r where r.companyId="1722" group by r.name ;
+// ==>
+db.runCommand(  {
+    aggregate: "4403",
+    pipeline: [
+        {
+            $match: {
+                "data.19109": "1722"
+            }
+        },
+        {
+            $group: {
+                _id: "$data.19264",
+                count: {
+                    $sum: 1.0
+                }
+            }
+        }
+    ],
+    cursor: {}
+})
+==>
+/* 1 */
+{
+    "waitedMS" : NumberLong(0),
+    "cursor" : {
+        "id" : NumberLong(0),
+        "ns" : "dms_admin.4403",
+        "firstBatch" : [
+            {
+                "_id" : "nametest2",
+                "count" : 1.0
+            },
+            {
+                "_id" : "nametest1",
+                "count" : 1.0
+            },
+            {
+                "_id" : "name1",
+                "count" : 1.0
+            },
+            {
+                "_id" : "name5",
+                "count" : 1.0
+            }
+        ]
+    },
+    "ok" : 1.0
+}
+
+//错误处理
+/* 1 */
+{
+    "ok" : 0.0,
+    "errmsg" : "cursor object can't contain fields other than batchSize",
+    "code" : 2
+}

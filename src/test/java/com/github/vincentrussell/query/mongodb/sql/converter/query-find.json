@@ -1,0 +1,61 @@
+// select * from Radar r where r.companyId="1722" and r.createUserId="7225" limit 10;
+// ==>
+db.runCommand({
+    find: "4403",
+    filter: {
+        $and: [
+            {
+                "data.19109": "1722"
+            },
+            {
+                "data.19110": "7225"
+            }
+        ],
+        isDeleted: "0"
+    },
+    limit: 10.0,
+    singleBatch: false,
+    projection: {
+        "data.19110": 1.0,
+        createDepartmentId: "1",
+        isDeleted: "1",
+        modifiedTime: "1",
+        modifyUserId: "1",
+        modifyDepartmentId: "1",
+        createdTime: "1"
+    }
+})
+==>
+/* 1 */
+{
+    "waitedMS" : NumberLong(0),
+    "cursor" : {
+        "firstBatch" : [
+            {
+                "_id" : "1893654",
+                "data" : {
+                    "19110" : "7225"
+                },
+                "createdTime" : ISODate("2019-03-28T01:54:03.000Z"),
+                "modifiedTime" : ISODate("2019-03-28T01:54:04.046Z"),
+                "isDeleted" : "0",
+                "modifyUserId" : "7225",
+                "modifyDepartmentId" : "3756"
+            },
+            {
+                "_id" : "1901052",
+                "data" : {
+                    "19110" : "7225"
+                },
+                "createdTime" : ISODate("2019-03-29T06:50:19.000Z"),
+                "modifiedTime" : ISODate("2019-03-29T06:51:22.800Z"),
+                "isDeleted" : "0",
+                "modifyUserId" : "7225",
+                "modifyDepartmentId" : "3756"
+            }
+        ],
+        "id" : NumberLong(0),
+        "ns" : "dms_admin.4403"
+    },
+    "ok" : 1.0
+}

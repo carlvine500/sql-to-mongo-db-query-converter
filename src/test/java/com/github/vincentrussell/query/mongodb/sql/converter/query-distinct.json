@@ -1,0 +1,33 @@
+// select distinct(modifyDepartmentId) from Radar r where r.companyId="1722" and r.createUserId="7225" ;
+// db.getCollection("4403").distinct("data.19263" , {})
+// ==>
+db.runCommand({
+    distinct: "4403",
+    key: "data.19263",
+    query: {
+        $and: [
+            {
+                "data.19109": "1722"
+            },
+            {
+                "data.19110": "7225"
+            }
+        ]
+    }
+})
+==>
+/* 1 */
+{
+    "waitedMS" : NumberLong(0),
+    "values" : [
+        "3756"
+    ],
+    "stats" : {
+        "n" : 4,
+        "nscanned" : 0,
+        "nscannedObjects" : 4,
+        "timems" : 0,
+        "planSummary" : "COLLSCAN"
+    },
+    "ok" : 1.0
+}

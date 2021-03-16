@@ -1,0 +1,24 @@
+// select count(*) from Radar r where r.companyId="1722" and r.createUserId="7225" ;
+// ==>
+db.runCommand( {
+    count: "4403",
+    query: {
+        $and: [
+            {
+                "data.19109": "1722"
+            },
+            {
+                "data.19110": "7225"
+            }
+        ]
+    },
+    fields: {}
+})
+==>
+/* 1 */
+/* 1 */
+{
+    "waitedMS" : NumberLong(0),
+    "n" : 4,
+    "ok" : 1.0
+}
